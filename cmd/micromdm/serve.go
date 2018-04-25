@@ -91,6 +91,7 @@ func serve(args []string) error {
 	var (
 		flConfigPath        = flagset.String("config-path", "/var/db/micromdm", "path to configuration directory")
 		flServerURL         = flagset.String("server-url", "", "public HTTPS url of your server")
+		flSCEPServerURL     = flagset.String("scep-server-url", "", "public HTTPS url of your SCEP server")
 		flAPIKey            = flagset.String("api-key", env.String("MICROMDM_API_KEY", ""), "API Token for mdmctl command")
 		flAPNSCertPath      = flagset.String("apns-cert", "", "path to APNS certificate")
 		flAPNSKeyPass       = flagset.String("apns-password", env.String("MICROMDM_APNS_KEY_PASSWORD", ""), "password for your p12 APNS cert file (if using)")
@@ -133,6 +134,7 @@ func serve(args []string) error {
 	sm := &server{
 		configPath:          *flConfigPath,
 		ServerPublicURL:     strings.TrimRight(*flServerURL, "/"),
+		SCEPPublicURL:       *flSCEPServerURL,
 		APNSCertificatePath: *flAPNSCertPath,
 		APNSPrivateKeyPass:  *flAPNSKeyPass,
 		APNSPrivateKeyPath:  *flAPNSKeyPath,
@@ -429,6 +431,7 @@ type server struct {
 	db                  *bolt.DB
 	pushCert            pushServiceCert
 	ServerPublicURL     string
+	SCEPPublicURL       string
 	SCEPChallenge       string
 	APNSPrivateKeyPath  string
 	APNSCertificatePath string
@@ -696,14 +699,23 @@ func (c *server) setupEnrollmentService() {
 		topicProvider = c.configDB
 	}
 
+	var scepPublicUrl string
+	switch c.SCEPPublicURL {
+	case "":
+		scepPublicUrl = c.ServerPublicURL + "/scep"
+	default:
+		scepPublicUrl = c.SCEPPublicURL
+	}
+
 	var SCEPCertificateSubject string
 	// TODO: clean up order of inputs. Maybe pass *SCEPConfig as an arg?
 	// but if you do, the packages are coupled, better not.
+
 	c.enrollService, c.err = enroll.NewService(
 		topicProvider,
 		c.pubclient,
 		c.scepCACertPath,
-		c.ServerPublicURL+"/scep",
+		scepPublicUrl,
 		c.SCEPChallenge,
 		c.ServerPublicURL,
 		c.tlsCertPath,
